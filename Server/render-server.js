@@ -1,36 +1,24 @@
 
-const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const { ExpressPeerServer } = require("peer");
-
-const app = express();
-const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 4;
 
 const rooms = new Map();
 
-// Página inicial para verificar se o servidor está online
-app.get("/", (req, res) => {
-  res.json({
-    name: "Flight Friends Server",
+const server = http.createServer((req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    name: "Flight Friends Rooms Server",
     status: "online",
     version: "1.0.0"
-  });
+  }));
 });
 
-// Servidor PeerJS
-const peerServer = ExpressPeerServer(server, {
-  path: "/",
-  proxied: true,
-  debug: false
-});
-
-app.use("/peerjs", peerServer);
-
-// Servidor WebSocket das salas
 const wss = new WebSocket.Server({
   server,
   path: "/rooms"
@@ -44,6 +32,7 @@ function send(socket, data) {
 
 function broadcast(room, data, excludedSocket = null) {
   const clients = rooms.get(room);
+
   if (!clients) return;
 
   clients.forEach(client => {
@@ -164,7 +153,9 @@ wss.on("connection", socket => {
       count: clients.size
     }, socket);
 
-    console.log(`Piloto ${peerId} entrou na sala ${room}. Total: ${clients.size}`);
+    console.log(
+      `Piloto ${peerId} entrou na sala ${room}. Total: ${clients.size}`
+    );
   });
 
   socket.on("close", () => leaveRoom(socket));
@@ -172,5 +163,5 @@ wss.on("connection", socket => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Flight Friends online na porta ${PORT}`);
+  console.log(`Flight Friends Rooms online na porta ${PORT}`);
 });

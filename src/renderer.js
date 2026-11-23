@@ -1,3 +1,4 @@
+
 const CONFIG = window.FLIGHT_CONFIG;
 const $ = id => document.getElementById(id);
 
@@ -16,15 +17,6 @@ const members = new Set();
 const calls = new Map();
 const remoteStreams = new Map();
 const cards = new Map();
-
-function serverAddress(path) {
-  const url = new URL(CONFIG.PEER_SERVER_URL);
-  url.pathname = path;
-  url.search = "";
-  url.hash = "";
-  return url;
-}
-
 
 function setConnection(online, message) {
   $("connectionDot").classList.toggle("online", online);
@@ -64,7 +56,7 @@ async function loadMicrophones() {
         const option = document.createElement("option");
         option.value = device.deviceId;
         option.textContent =
-          device.label || "Microfone " + ( $("micSelect").length + 1 );
+          device.label || "Microfone " + ($("micSelect").length + 1);
 
         $("micSelect").appendChild(option);
       });
@@ -189,29 +181,39 @@ function handleIncomingCalls() {
 }
 
 function connectRoomSocket(roomName) {
-return new Promise((resolve, reject) => {
-  roomSocket = new WebSocket(CONFIG.ROOMS_SERVER_URL);
+  return new Promise((resolve, reject) => {
+    roomSocket = new WebSocket(CONFIG.ROOMS_SERVER_URL);
 
-  roomSocket.onopen = () => {
-    roomSocket.send(JSON.stringify({
-      type: "join",
-      room: roomName,
-      peerId: myPeerId
-    }));
-  };
+    roomSocket.onopen = () => {
+      roomSocket.send(JSON.stringify({
+        type: "join",
+        room: roomName,
+        peerId: myPeerId
+      }));
+    };
 
     roomSocket.onmessage = event => {
-      const data = JSON.parse(event.data);
+      let data;
+
+      try {
+        data = JSON.parse(event.data);
+      } catch (error) {
+        console.error("Mensagem inválida do servidor:", error);
+        return;
+      }
 
       if (data.type === "joined") {
         joined = true;
 
         data.members.forEach(id => {
-          if (id !== myPeerId) members.add(id);
+          if (id !== myPeerId) {
+            members.add(id);
+          }
         });
 
         updateCount();
         setConnection(true, "Conectado à sala");
+
         resolve();
       }
 
@@ -262,27 +264,11 @@ async function joinRoom() {
   setConnection(false, "Conectando...");
 
   try {
-    const server = new URL(CONFIG.PEER_SERVER_URL);
-
-  peer = new Peer(undefined, {
-    host: server.hostname,
-    port: server.port || (server.protocol === "https:" ? 443 : 80),
-    secure: server.protocol === "https:",
-    path: "/peerjs",
-    config: {
-      iceServers: CONFIG.ICE_SERVERS
-    }
-  });
-
-peer = new Peer(undefined, {
-  host: server.hostname,
-  port: server.port || (server.protocol === "https:" ? 443 : 80),
-  secure: server.protocol === "https:",
-  path: "/peerjs",
-  config: {
-    iceServers: CONFIG.ICE_SERVERS
-  }
-});
+    peer = new Peer(undefined, {
+      config: {
+        iceServers: CONFIG.ICE_SERVERS
+      }
+    });
 
     peer.on("open", async id => {
       myPeerId = id;
@@ -295,6 +281,7 @@ peer = new Peer(undefined, {
         $("joinBtn").disabled = true;
         $("leaveBtn").disabled = false;
       } catch (error) {
+        console.error("Erro ao entrar na sala:", error);
         alert(error.message);
         leaveRoom();
       }
@@ -303,9 +290,11 @@ peer = new Peer(undefined, {
     peer.on("error", error => {
       console.error("PeerJS:", error);
       setConnection(false, "Erro PeerJS");
+      $("joinBtn").disabled = false;
     });
 
   } catch (error) {
+    console.error(error);
     alert(error.message);
     $("joinBtn").disabled = false;
   }
@@ -396,6 +385,7 @@ async function startSharing() {
 
   } catch (error) {
     console.error(error);
+
     alert(
       "Não foi possível iniciar a transmissão: " + error.message
     );
@@ -450,6 +440,7 @@ function stopSharing() {
   $("shareBtn").disabled = false;
   $("stopBtn").disabled = true;
   $("micBtn").textContent = "🎙 Microfone ligado";
+
   micEnabled = true;
 }
 
