@@ -9,7 +9,13 @@ let displayStream = null;
 let micStream = null;
 let audioContext = null;
 let audioDestination = null;
+
 let micEnabled = true;
+let screenAudioEnabled = true;
+
+let micGain = null;
+let systemAudioGain = null;
+
 let joined = false;
 let myPeerId = null;
 
@@ -28,6 +34,46 @@ function updateCount() {
     `${members.size + (joined ? 1 : 0)} / ${CONFIG.MAX_PLAYERS} pilotos`;
 }
 
+function updateAudioButtons() {
+  const micBtn = $("micBtn");
+  const screenBtn = $("screenAudioBtn");
+
+  if (micBtn) {
+    micBtn.textContent = micEnabled
+      ? "🎙 Microfone ligado"
+      : "🔇 Microfone mutado";
+  }
+
+  if (screenBtn) {
+    screenBtn.textContent = screenAudioEnabled
+      ? "🔊 Áudio da tela ligado"
+      : "🔇 Áudio da tela mutado";
+  }
+}
+
+// Cria automaticamente o botão de áudio da tela.
+// Não é necessário modificar o index.html.
+function createScreenAudioButton() {
+  if ($("screenAudioBtn")) return;
+
+  const micBtn = $("micBtn");
+
+  if (!micBtn) return;
+
+  const button = document.createElement("button");
+
+  button.id = "screenAudioBtn";
+  button.type = "button";
+  button.className = micBtn.className;
+  button.textContent = "🔊 Áudio da tela ligado";
+  button.disabled = true;
+  button.title = "Controlar o áudio do simulador ou da tela";
+
+  micBtn.insertAdjacentElement("afterend", button);
+
+  button.addEventListener("click", toggleScreenAudio);
+}
+
 async function loadSources() {
   const sources = await window.flightAPI.getSources();
   const select = $("sourceSelect");
@@ -44,7 +90,10 @@ async function loadSources() {
 
 async function loadMicrophones() {
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const permissionStream =
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    permissionStream.getTracks().forEach(track => track.stop());
 
     const devices = await navigator.mediaDevices.enumerateDevices();
 
@@ -81,6 +130,10 @@ function createCard(id, name, stream, local = false) {
   video.playsInline = true;
   video.muted = local;
   video.srcObject = stream;
+
+  video.play().catch(error => {
+    console.warn("Não foi possível reproduzir o vídeo:", error);
+  });
 
   const info = document.createElement("div");
   info.className = "video-info";
@@ -138,16 +191,17 @@ function removeRemote(id) {
   const call = calls.get(id);
 
   if (call) {
-    call.close();
     calls.delete(id);
+    call.close();
   }
 }
 
 function connectTo(id) {
-  if (!localStream || !peer || id === myPeerId) return;
+  if (!peer || id === myPeerId || !members.has(id)) return;
+
   if (calls.has(id)) return;
 
-  const call = peer.call(id, localStream);
+  const call = peer.call(id, localStream || undefined);
 
   if (!call) return;
 
@@ -157,11 +211,17 @@ function connectTo(id) {
 
 function configureCall(id, call) {
   call.on("stream", stream => {
-    displayRemote(id, stream);
+    if (calls.get(id) === call) {
+      displayRemote(id, stream);
+    }
   });
 
   call.on("close", () => {
-    removeRemote(id);
+    if (calls.get(id) !== call) return;
+
+    calls.delete(id);
+    remoteStreams.delete(id);
+    removeCard(id);
   });
 
   call.on("error", error => {
@@ -173,10 +233,19 @@ function handleIncomingCalls() {
   peer.on("call", call => {
     const remoteId = call.peer;
 
-    call.answer(localStream || undefined);
+    const existingCall = calls.get(remoteId);
+
+    if (existingCall) {
+      console.warn("Já existe uma chamada com:", remoteId);
+      call.close();
+      return;
+    }
 
     calls.set(remoteId, call);
+
     configureCall(remoteId, call);
+
+    call.answer(localStream || undefined);
   });
 }
 
@@ -306,6 +375,11 @@ async function startSharing() {
     return;
   }
 
+  if (localStream) {
+    alert("Você já está compartilhando sua tela.");
+    return;
+  }
+
   try {
     const sourceId = $("sourceSelect").value;
 
@@ -336,7 +410,7 @@ async function startSharing() {
         frameRate: { ideal: fps, max: fps }
       }).catch(console.warn);
 
-      videoTrack.onended = stopSharing;
+      videoTrack.onended = () => stopSharing();
     }
 
     const micId = $("micSelect").value;
@@ -355,26 +429,48 @@ async function startSharing() {
       video: false
     });
 
+    // Cria o sistema de áudio separado.
     audioContext = new AudioContext();
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
     audioDestination = audioContext.createMediaStreamDestination();
 
+    // Áudio do simulador ou da tela.
     const systemTracks = displayStream.getAudioTracks();
+
+    systemAudioGain = null;
+    screenAudioEnabled = true;
 
     if (systemTracks.length > 0) {
       const systemAudio = new MediaStream(systemTracks);
       const systemNode = audioContext.createMediaStreamSource(systemAudio);
 
-      systemNode.connect(audioDestination);
+      systemAudioGain = audioContext.createGain();
+      systemAudioGain.gain.value = 1;
+
+      systemNode.connect(systemAudioGain);
+      systemAudioGain.connect(audioDestination);
     }
 
+    // Microfone.
     const micNode = audioContext.createMediaStreamSource(micStream);
 
-    micNode.connect(audioDestination);
+    micGain = audioContext.createGain();
+    micGain.gain.value = 1;
 
+    micNode.connect(micGain);
+    micGain.connect(audioDestination);
+
+    // Junta os áudios já controlados em uma faixa de saída.
     localStream = new MediaStream([
-      videoTrack,
+      ...displayStream.getVideoTracks(),
       ...audioDestination.stream.getAudioTracks()
     ]);
+
+    micEnabled = true;
 
     createCard(myPeerId, "Você", localStream, true);
 
@@ -383,6 +479,16 @@ async function startSharing() {
     $("shareBtn").disabled = true;
     $("stopBtn").disabled = false;
 
+    $("screenAudioBtn").disabled = systemTracks.length === 0;
+
+    if (systemTracks.length === 0) {
+      console.warn(
+        "A tela compartilhada não forneceu áudio. Verifique se a opção de compartilhar áudio está disponível e selecionada."
+      );
+    }
+
+    updateAudioButtons();
+
   } catch (error) {
     console.error(error);
 
@@ -390,32 +496,47 @@ async function startSharing() {
       "Não foi possível iniciar a transmissão: " + error.message
     );
 
-    stopSharing();
+    stopSharing(false);
   }
 }
 
+// Controle exclusivo do microfone.
 function toggleMic() {
-  if (!micStream) {
+  if (!micStream || !micGain) {
     alert("Inicie a transmissão primeiro.");
     return;
   }
 
   micEnabled = !micEnabled;
 
-  micStream.getAudioTracks().forEach(track => {
-    track.enabled = micEnabled;
-  });
+  micGain.gain.value = micEnabled ? 1 : 0;
 
-  $("micBtn").textContent = micEnabled
-    ? "🎙 Microfone ligado"
-    : "🔇 Microfone mutado";
+  updateAudioButtons();
 }
 
-function stopSharing() {
-  if (calls.size) {
-    calls.forEach(call => call.close());
-    calls.clear();
+// Controle exclusivo do áudio do simulador ou da tela.
+function toggleScreenAudio() {
+  if (!displayStream || !systemAudioGain) {
+    alert(
+      "O áudio da tela não está disponível. Verifique se a tela compartilhada está transmitindo áudio."
+    );
+    return;
   }
+
+  screenAudioEnabled = !screenAudioEnabled;
+
+  systemAudioGain.gain.value = screenAudioEnabled ? 1 : 0;
+
+  updateAudioButtons();
+}
+
+function stopSharing(reconnect = true) {
+  const peerIds = [...members];
+
+  calls.forEach((call, id) => {
+    calls.delete(id);
+    call.close();
+  });
 
   if (displayStream) {
     displayStream.getTracks().forEach(track => track.stop());
@@ -435,17 +556,27 @@ function stopSharing() {
   localStream = null;
   audioDestination = null;
 
+  micGain = null;
+  systemAudioGain = null;
+
   removeCard(myPeerId);
+
+  micEnabled = true;
+  screenAudioEnabled = true;
 
   $("shareBtn").disabled = false;
   $("stopBtn").disabled = true;
-  $("micBtn").textContent = "🎙 Microfone ligado";
+  $("screenAudioBtn").disabled = true;
 
-  micEnabled = true;
+  updateAudioButtons();
+
+  if (reconnect && joined && peer) {
+    peerIds.forEach(id => connectTo(id));
+  }
 }
 
 function leaveRoom() {
-  stopSharing();
+  stopSharing(false);
 
   if (roomSocket) {
     roomSocket.close();
@@ -472,6 +603,8 @@ function leaveRoom() {
   setConnection(false, "Desconectado");
   updateCount();
 }
+
+createScreenAudioButton();
 
 $("joinBtn").addEventListener("click", joinRoom);
 $("leaveBtn").addEventListener("click", leaveRoom);
