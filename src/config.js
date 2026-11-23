@@ -1,7 +1,7 @@
 
 window.FLIGHT_CONFIG = {
-  PEER_SERVER_URL: "http://localhost:3000",
-  ROOMS_SERVER_URL: "ws://localhost:3001/rooms",
+  PEER_SERVER_URL: "https://fligthfriends.onrender.com",
+  ROOMS_SERVER_URL: "wss://fligthfriends.onrender.com/rooms",
 
   ICE_SERVERS: [
     { urls: "stun:stun.l.google.com:19302" }
