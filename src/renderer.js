@@ -1,6 +1,4 @@
-
-
-
+const CONFIG = window.FLIGHT_CONFIG;
 const $ = id => document.getElementById(id);
 
 let peer = null;
@@ -20,12 +18,13 @@ const remoteStreams = new Map();
 const cards = new Map();
 
 function serverAddress(path) {
-  const url = new URL(CONFIG.SERVER_URL);
+  const url = new URL(CONFIG.PEER_SERVER_URL);
   url.pathname = path;
   url.search = "";
   url.hash = "";
   return url;
 }
+
 
 function setConnection(online, message) {
   $("connectionDot").classList.toggle("online", online);
@@ -190,23 +189,16 @@ function handleIncomingCalls() {
 }
 
 function connectRoomSocket(roomName) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(CONFIG.SERVER_URL);
-url.port = "3001";
-url.pathname = "/rooms";
-url.search = "";
-url.hash = "";
-url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+return new Promise((resolve, reject) => {
+  roomSocket = new WebSocket(CONFIG.ROOMS_SERVER_URL);
 
-    roomSocket = new WebSocket(url);
-
-    roomSocket.onopen = () => {
-      roomSocket.send(JSON.stringify({
-        type: "join",
-        room: roomName,
-        peerId: myPeerId
-      }));
-    };
+  roomSocket.onopen = () => {
+    roomSocket.send(JSON.stringify({
+      type: "join",
+      room: roomName,
+      peerId: myPeerId
+    }));
+  };
 
     roomSocket.onmessage = event => {
       const data = JSON.parse(event.data);
@@ -270,17 +262,27 @@ async function joinRoom() {
   setConnection(false, "Conectando...");
 
   try {
-    const server = serverAddress("/");
+    const server = new URL(CONFIG.PEER_SERVER_URL);
 
-    peer = new Peer(undefined, {
-      host: server.hostname,
-      port: server.port || (server.protocol === "https:" ? 443 : 80),
-      secure: server.protocol === "https:",
-      path: "/peerjs",
-      config: {
-        iceServers: CONFIG.ICE_SERVERS
-      }
-    });
+  peer = new Peer(undefined, {
+    host: server.hostname,
+    port: server.port || (server.protocol === "https:" ? 443 : 80),
+    secure: server.protocol === "https:",
+    path: "/peerjs",
+    config: {
+      iceServers: CONFIG.ICE_SERVERS
+    }
+  });
+
+peer = new Peer(undefined, {
+  host: server.hostname,
+  port: server.port || (server.protocol === "https:" ? 443 : 80),
+  secure: server.protocol === "https:",
+  path: "/peerjs",
+  config: {
+    iceServers: CONFIG.ICE_SERVERS
+  }
+});
 
     peer.on("open", async id => {
       myPeerId = id;
