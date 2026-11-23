@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  media-src 'self' blob:;
+  connect-src 'self' http: https: ws: wss:;"
+>
+
+  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Flight Friends</title>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">✈</span>
+      <div>
+        <h1>FLIGHT FRIENDS</h1>
+        <small>Virtual Flight Community</small>
+      </div>
+    </div>
+
+    <div class="connection">
+      <span id="connectionDot" class="dot"></span>
+      <span id="connectionText">Desconectado</span>
+    </div>
+  </header>
+
+  <main>
+
+    <section class="room-panel">
+
+      <div class="room-input">
+        <label for="roomName">Nome da sala</label>
+        <input
+          id="roomName"
+          type="text"
+          maxlength="32"
+          placeholder="voo-amigos"
+        >
+      </div>
+
+      <button id="joinBtn" class="primary">
+        Entrar na sala
+      </button>
+
+      <button id="leaveBtn" class="secondary" disabled>
+        Sair
+      </button>
+
+      <span id="playerCount">0 / 4 pilotos</span>
+
+    </section>
+
+    <section class="settings-panel">
+
+      <div>
+        <label for="sourceSelect">Janela para transmitir</label>
+        <select id="sourceSelect">
+          <option value="">Carregando janelas...</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="fpsSelect">FPS</label>
+        <select id="fpsSelect">
+          <option value="30">30 FPS</option>
+          <option value="24">24 FPS</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="micSelect">Microfone</label>
+        <select id="micSelect">
+          <option value="">Microfone padrão</option>
+        </select>
+      </div>
+
+    </section>
+
+    <section class="controls">
+
+      <button id="shareBtn" class="primary">
+        ▶ Compartilhar meu voo
+      </button>
+
+      <button id="stopBtn" class="secondary" disabled>
+        ■ Parar transmissão
+      </button>
+
+      <button id="micBtn" class="secondary">
+        🎙 Microfone ligado
+      </button>
+
+    </section>
+
+    <section class="grid" id="videoGrid">
+
+      <div class="video-card empty">
+        <span>✈</span>
+        <p>Aguardando piloto...</p>
+      </div>
+
+      <div class="video-card empty">
+        <span>✈</span>
+        <p>Aguardando piloto...</p>
+      </div>
+
+      <div class="video-card empty">
+        <span>✈</span>
+        <p>Aguardando piloto...</p>
+      </div>
+
+      <div class="video-card empty">
+        <span>✈</span>
+        <p>Aguardando piloto...</p>
+      </div>
+
+    </section>
+
+    <footer>
+      <span>Flight Friends v1.0.0</span>
+      <span>WebRTC · PeerJS · Electron</span>
+    </footer>
+
+  </main>
+
+  <script src="../node_modules/peerjs/dist/peerjs.min.js"></script>
+  <script src="config.js"></script>
+  <script src="renderer.js"></script>
+
+</body>
+</html>
