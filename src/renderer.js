@@ -13,6 +13,9 @@ let audioDestination = null;
 let micEnabled = true;
 let screenAudioEnabled = true;
 
+// Volume inicial do microfone: 150%.
+let micVolume = 1.5;
+
 let micGain = null;
 let systemAudioGain = null;
 
@@ -52,7 +55,6 @@ function updateAudioButtons() {
 }
 
 // Cria automaticamente o botão de áudio da tela.
-// Não é necessário modificar o index.html.
 function createScreenAudioButton() {
   if ($("screenAudioBtn")) return;
 
@@ -72,6 +74,74 @@ function createScreenAudioButton() {
   micBtn.insertAdjacentElement("afterend", button);
 
   button.addEventListener("click", toggleScreenAudio);
+}
+
+// Cria o controle de volume do microfone.
+function createMicVolumeControl() {
+  if ($("micVolumeContainer")) return;
+
+  const anchor = $("screenAudioBtn") || $("micBtn");
+
+  if (!anchor) return;
+
+  const container = document.createElement("div");
+  container.id = "micVolumeContainer";
+
+  container.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 8px 0;
+    padding: 8px 10px;
+    max-width: 260px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.12);
+  `;
+
+  const label = document.createElement("label");
+  label.htmlFor = "micVolumeSlider";
+  label.textContent = "🎙 Volume do microfone: ";
+
+  const value = document.createElement("strong");
+  value.id = "micVolumeValue";
+  value.textContent = "150%";
+
+  label.appendChild(value);
+
+  const slider = document.createElement("input");
+  slider.id = "micVolumeSlider";
+  slider.type = "range";
+  slider.min = "100";
+  slider.max = "300";
+  slider.step = "10";
+  slider.value = "150";
+  slider.title = "Ajustar o volume do microfone";
+
+  slider.style.cssText = `
+    width: 100%;
+    cursor: pointer;
+  `;
+
+  slider.addEventListener("input", () => {
+    micVolume = Number(slider.value) / 100;
+
+    value.textContent = slider.value + "%";
+
+    // Ajusta o microfone imediatamente, sem afetar o áudio da tela.
+    if (micGain && audioContext) {
+      const targetVolume = micEnabled ? micVolume : 0;
+
+      micGain.gain.setTargetAtTime(
+        targetVolume,
+        audioContext.currentTime,
+        0.03
+      );
+    }
+  });
+
+  container.append(label, slider);
+
+  anchor.insertAdjacentElement("afterend", container);
 }
 
 async function loadSources() {
@@ -455,11 +525,11 @@ async function startSharing() {
       systemAudioGain.connect(audioDestination);
     }
 
-    // Microfone.
+    // Microfone com amplificação independente.
     const micNode = audioContext.createMediaStreamSource(micStream);
 
     micGain = audioContext.createGain();
-    micGain.gain.value = 1;
+    micGain.gain.value = micEnabled ? micVolume : 0;
 
     micNode.connect(micGain);
     micGain.connect(audioDestination);
@@ -471,6 +541,9 @@ async function startSharing() {
     ]);
 
     micEnabled = true;
+
+    // Aplica o volume selecionado ao iniciar.
+    micGain.gain.value = micVolume;
 
     createCard(myPeerId, "Você", localStream, true);
 
@@ -509,7 +582,11 @@ function toggleMic() {
 
   micEnabled = !micEnabled;
 
-  micGain.gain.value = micEnabled ? 1 : 0;
+  micGain.gain.setTargetAtTime(
+    micEnabled ? micVolume : 0,
+    audioContext.currentTime,
+    0.03
+  );
 
   updateAudioButtons();
 }
@@ -605,6 +682,7 @@ function leaveRoom() {
 }
 
 createScreenAudioButton();
+createMicVolumeControl();
 
 $("joinBtn").addEventListener("click", joinRoom);
 $("leaveBtn").addEventListener("click", leaveRoom);
