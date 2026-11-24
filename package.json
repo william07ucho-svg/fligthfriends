@@ -1,6 +1,6 @@
 {
   "name": "flight-friends",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Compartilhamento de voos do Microsoft Flight Simulator",
   "main": "main.js",
   "author": "Flight Friends",
@@ -10,8 +10,9 @@
     "build": "electron-builder --win nsis portable"
   },
   "dependencies": {
-    "peerjs": "^1.5.4"
-  },
+  "peerjs": "^1.5.4",
+  "electron-updater": "^6.6.2"
+},
   "devDependencies": {
     "electron": "^34.0.0",
     "electron-builder": "^26.0.0"
@@ -20,8 +21,15 @@
     "appId": "com.flightfriends.desktop",
     "productName": "Flight Friends",
     "directories": {
-      "output": "dist"
-    },
+  "output": "dist"
+},
+"publish": [
+  {
+    "provider": "github",
+    "owner": "william07ucho-svg",
+    "repo": "fligthfriends"
+  }
+],
     "files": [
       "main.js",
       "preload.js",

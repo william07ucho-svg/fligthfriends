@@ -11,16 +11,19 @@ let audioContext = null;
 let audioDestination = null;
 
 let micEnabled = true;
-let screenAudioEnabled = true;
-
-// Volume inicial do microfone: 150%.
 let micVolume = 1.5;
+let systemAudioVolume = 1.0;
 
 let micGain = null;
 let systemAudioGain = null;
 
 let joined = false;
 let myPeerId = null;
+
+let micVolumeSlider = null;
+let micVolumeValue = null;
+let systemVolumeSlider = null;
+let systemVolumeValue = null;
 
 const members = new Set();
 const calls = new Map();
@@ -39,54 +42,18 @@ function updateCount() {
 
 function updateAudioButtons() {
   const micBtn = $("micBtn");
-  const screenBtn = $("screenAudioBtn");
 
   if (micBtn) {
     micBtn.textContent = micEnabled
       ? "🎙 Microfone ligado"
       : "🔇 Microfone mutado";
   }
-
-  if (screenBtn) {
-    screenBtn.textContent = screenAudioEnabled
-      ? "🔊 Áudio da tela ligado"
-      : "🔇 Áudio da tela mutado";
-  }
 }
 
-// Cria automaticamente o botão de áudio da tela.
-function createScreenAudioButton() {
-  if ($("screenAudioBtn")) return;
-
-  const micBtn = $("micBtn");
-
-  if (!micBtn) return;
-
-  const button = document.createElement("button");
-
-  button.id = "screenAudioBtn";
-  button.type = "button";
-  button.className = micBtn.className;
-  button.textContent = "🔊 Áudio da tela ligado";
-  button.disabled = true;
-  button.title = "Controlar o áudio do simulador ou da tela";
-
-  micBtn.insertAdjacentElement("afterend", button);
-
-  button.addEventListener("click", toggleScreenAudio);
-}
-
-// Cria o controle de volume do microfone.
-function createMicVolumeControl() {
-  if ($("micVolumeContainer")) return;
-
-  const anchor = $("screenAudioBtn") || $("micBtn");
-
-  if (!anchor) return;
-
+function createVolumeContainer(id) {
   const container = document.createElement("div");
-  container.id = "micVolumeContainer";
 
+  container.id = id;
   container.style.cssText = `
     display: flex;
     flex-direction: column;
@@ -98,49 +65,103 @@ function createMicVolumeControl() {
     background: rgba(0, 0, 0, 0.12);
   `;
 
+  return container;
+}
+
+function createMicVolumeControl() {
+  if ($("micVolumeContainer")) return;
+
+  const micBtn = $("micBtn");
+  if (!micBtn) return;
+
+  const container = createVolumeContainer("micVolumeContainer");
+
   const label = document.createElement("label");
   label.htmlFor = "micVolumeSlider";
   label.textContent = "🎙 Volume do microfone: ";
 
-  const value = document.createElement("strong");
-  value.id = "micVolumeValue";
-  value.textContent = "150%";
+  micVolumeValue = document.createElement("strong");
+  micVolumeValue.textContent = "150%";
 
-  label.appendChild(value);
+  label.appendChild(micVolumeValue);
 
-  const slider = document.createElement("input");
-  slider.id = "micVolumeSlider";
-  slider.type = "range";
-  slider.min = "100";
-  slider.max = "300";
-  slider.step = "10";
-  slider.value = "150";
-  slider.title = "Ajustar o volume do microfone";
+  micVolumeSlider = document.createElement("input");
+  micVolumeSlider.id = "micVolumeSlider";
+  micVolumeSlider.type = "range";
+  micVolumeSlider.min = "100";
+  micVolumeSlider.max = "300";
+  micVolumeSlider.step = "10";
+  micVolumeSlider.value = "150";
+  micVolumeSlider.style.cssText = "width:100%;cursor:pointer;";
 
-  slider.style.cssText = `
-    width: 100%;
-    cursor: pointer;
-  `;
+  micVolumeSlider.addEventListener("input", () => {
+    micVolume = Number(micVolumeSlider.value) / 100;
+    micVolumeValue.textContent = micVolumeSlider.value + "%";
 
-  slider.addEventListener("input", () => {
-    micVolume = Number(slider.value) / 100;
-
-    value.textContent = slider.value + "%";
-
-    // Ajusta o microfone imediatamente, sem afetar o áudio da tela.
     if (micGain && audioContext) {
-      const targetVolume = micEnabled ? micVolume : 0;
-
       micGain.gain.setTargetAtTime(
-        targetVolume,
+        micEnabled ? micVolume : 0,
         audioContext.currentTime,
         0.03
       );
     }
   });
 
-  container.append(label, slider);
+  container.append(label, micVolumeSlider);
+  micBtn.insertAdjacentElement("afterend", container);
+}
 
+function createSystemAudioVolumeControl() {
+  if ($("systemVolumeContainer")) return;
+
+  const micContainer = $("micVolumeContainer");
+  const micBtn = $("micBtn");
+
+  const anchor = micContainer || micBtn;
+  if (!anchor) return;
+
+  const container = createVolumeContainer("systemVolumeContainer");
+
+  const label = document.createElement("label");
+  label.htmlFor = "systemVolumeSlider";
+  label.textContent = "🔊 Volume do áudio da tela: ";
+
+  systemVolumeValue = document.createElement("strong");
+  systemVolumeValue.textContent = "100%";
+
+  label.appendChild(systemVolumeValue);
+
+  systemVolumeSlider = document.createElement("input");
+  systemVolumeSlider.id = "systemVolumeSlider";
+  systemVolumeSlider.type = "range";
+  systemVolumeSlider.min = "0";
+  systemVolumeSlider.max = "100";
+  systemVolumeSlider.step = "5";
+  systemVolumeSlider.value = "100";
+  systemVolumeSlider.disabled = true;
+  systemVolumeSlider.title = "Volume do áudio enviado aos outros pilotos";
+
+  systemVolumeSlider.style.cssText = `
+    width: 100%;
+    cursor: pointer;
+  `;
+
+  systemVolumeSlider.addEventListener("input", () => {
+    systemAudioVolume = Number(systemVolumeSlider.value) / 100;
+
+    systemVolumeValue.textContent =
+      systemVolumeSlider.value + "%";
+
+    if (systemAudioGain && audioContext) {
+      systemAudioGain.gain.setTargetAtTime(
+        systemAudioVolume,
+        audioContext.currentTime,
+        0.03
+      );
+    }
+  });
+
+  container.append(label, systemVolumeSlider);
   anchor.insertAdjacentElement("afterend", container);
 }
 
@@ -268,7 +289,6 @@ function removeRemote(id) {
 
 function connectTo(id) {
   if (!peer || id === myPeerId || !members.has(id)) return;
-
   if (calls.has(id)) return;
 
   const call = peer.call(id, localStream || undefined);
@@ -312,7 +332,6 @@ function handleIncomingCalls() {
     }
 
     calls.set(remoteId, call);
-
     configureCall(remoteId, call);
 
     call.answer(localStream || undefined);
@@ -360,7 +379,6 @@ function connectRoomSocket(roomName) {
         if (data.peerId !== myPeerId) {
           members.add(data.peerId);
           updateCount();
-
           connectTo(data.peerId);
         }
       }
@@ -411,7 +429,6 @@ async function joinRoom() {
 
     peer.on("open", async id => {
       myPeerId = id;
-
       handleIncomingCalls();
 
       try {
@@ -499,7 +516,6 @@ async function startSharing() {
       video: false
     });
 
-    // Cria o sistema de áudio separado.
     audioContext = new AudioContext();
 
     if (audioContext.state === "suspended") {
@@ -508,24 +524,21 @@ async function startSharing() {
 
     audioDestination = audioContext.createMediaStreamDestination();
 
-    // Áudio do simulador ou da tela.
     const systemTracks = displayStream.getAudioTracks();
 
     systemAudioGain = null;
-    screenAudioEnabled = true;
 
     if (systemTracks.length > 0) {
       const systemAudio = new MediaStream(systemTracks);
       const systemNode = audioContext.createMediaStreamSource(systemAudio);
 
       systemAudioGain = audioContext.createGain();
-      systemAudioGain.gain.value = 1;
+      systemAudioGain.gain.value = systemAudioVolume;
 
       systemNode.connect(systemAudioGain);
       systemAudioGain.connect(audioDestination);
     }
 
-    // Microfone com amplificação independente.
     const micNode = audioContext.createMediaStreamSource(micStream);
 
     micGain = audioContext.createGain();
@@ -534,16 +547,10 @@ async function startSharing() {
     micNode.connect(micGain);
     micGain.connect(audioDestination);
 
-    // Junta os áudios já controlados em uma faixa de saída.
     localStream = new MediaStream([
       ...displayStream.getVideoTracks(),
       ...audioDestination.stream.getAudioTracks()
     ]);
-
-    micEnabled = true;
-
-    // Aplica o volume selecionado ao iniciar.
-    micGain.gain.value = micVolume;
 
     createCard(myPeerId, "Você", localStream, true);
 
@@ -552,11 +559,13 @@ async function startSharing() {
     $("shareBtn").disabled = true;
     $("stopBtn").disabled = false;
 
-    $("screenAudioBtn").disabled = systemTracks.length === 0;
+    if (systemVolumeSlider) {
+      systemVolumeSlider.disabled = systemTracks.length === 0;
+    }
 
     if (systemTracks.length === 0) {
       console.warn(
-        "A tela compartilhada não forneceu áudio. Verifique se a opção de compartilhar áudio está disponível e selecionada."
+        "A tela compartilhada não forneceu áudio. Verifique se a captura de áudio está disponível."
       );
     }
 
@@ -573,7 +582,6 @@ async function startSharing() {
   }
 }
 
-// Controle exclusivo do microfone.
 function toggleMic() {
   if (!micStream || !micGain) {
     alert("Inicie a transmissão primeiro.");
@@ -587,22 +595,6 @@ function toggleMic() {
     audioContext.currentTime,
     0.03
   );
-
-  updateAudioButtons();
-}
-
-// Controle exclusivo do áudio do simulador ou da tela.
-function toggleScreenAudio() {
-  if (!displayStream || !systemAudioGain) {
-    alert(
-      "O áudio da tela não está disponível. Verifique se a tela compartilhada está transmitindo áudio."
-    );
-    return;
-  }
-
-  screenAudioEnabled = !screenAudioEnabled;
-
-  systemAudioGain.gain.value = screenAudioEnabled ? 1 : 0;
 
   updateAudioButtons();
 }
@@ -639,11 +631,13 @@ function stopSharing(reconnect = true) {
   removeCard(myPeerId);
 
   micEnabled = true;
-  screenAudioEnabled = true;
 
   $("shareBtn").disabled = false;
   $("stopBtn").disabled = true;
-  $("screenAudioBtn").disabled = true;
+
+  if (systemVolumeSlider) {
+    systemVolumeSlider.disabled = true;
+  }
 
   updateAudioButtons();
 
@@ -681,8 +675,8 @@ function leaveRoom() {
   updateCount();
 }
 
-createScreenAudioButton();
 createMicVolumeControl();
+createSystemAudioVolumeControl();
 
 $("joinBtn").addEventListener("click", joinRoom);
 $("leaveBtn").addEventListener("click", leaveRoom);
